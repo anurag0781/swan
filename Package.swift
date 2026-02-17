@@ -36,9 +36,22 @@ let dawnTarget: Target = {
 	}
 }()
 
-var swiftSettings: [SwiftSetting] = [
-	.unsafeFlags(["-warnings-as-errors"])
-]
+// Xcode 16+ automatically adds -suppress-warnings for dependency package targets,
+// which fatally conflicts with -warnings-as-errors. Detect the Xcode build context
+// and skip -warnings-as-errors there; CLI builds (swift build) are unaffected.
+let isXcodeBuild: Bool = {
+	let env = ProcessInfo.processInfo.environment
+	// __CFBundleIdentifier is set to "com.apple.dt.Xcode" in Xcode's process tree
+	if env["__CFBundleIdentifier"] == "com.apple.dt.Xcode" { return true }
+	// xcodebuild also sets XCODE_PRODUCT_BUILD_VERSION
+	if env["XCODE_PRODUCT_BUILD_VERSION"] != nil { return true }
+	return false
+}()
+
+var swiftSettings: [SwiftSetting] = []
+if !isXcodeBuild {
+	swiftSettings.append(.unsafeFlags(["-warnings-as-errors"]))
+}
 
 // Generate PDB debug info on Windows for Visual Studio debugging compatibility
 if usePDBDebugInfo {
@@ -75,6 +88,9 @@ let package = Package(
 			name: "GenerateDawnAPINotesPlugin",
 			targets: ["GenerateDawnAPINotesPlugin"]
 		),
+		.library(name: "CDawn", targets: ["CDawn"]),
+		.library(name: "Dawn", targets: ["Dawn"]),
+		.library(name: "WebGPU", targets: ["WebGPU"]),
 	],
 	dependencies: [
 		.package(
@@ -144,8 +160,14 @@ let package = Package(
 			dependencies: [
 				"DawnLib"
 			],
+			cSettings: [
+				// Xcode's Clang module scanner needs the header search path in cSettings
+				// (not just cxxSettings) to find dawn/webgpu.h when building the CDawn module.
+				.headerSearchPath("../../.dawn-artifact-headers"),
+			],
 			cxxSettings: [
-				.unsafeFlags(["-std=c++23"])
+				.unsafeFlags(["-std=c++23"]),
+				.headerSearchPath("../../.dawn-artifact-headers"),
 			],
 			swiftSettings: swiftSettings,
 			linkerSettings: asanLinkerSettings

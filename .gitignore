@@ -1,5 +1,8 @@
 .build
 .DS_Store
+.dawn-artifact-headers
+.dawn-artifact-lib
+Sources/CDawn/include/dawn
 .vscode/settings.json
 .vs/
 webgpu_dawn.xcframework
