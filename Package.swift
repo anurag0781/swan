@@ -91,6 +91,8 @@ let package = Package(
 		.library(name: "CDawn", targets: ["CDawn"]),
 		.library(name: "Dawn", targets: ["Dawn"]),
 		.library(name: "WebGPU", targets: ["WebGPU"]),
+		.library(name: "DemoUtils", targets: ["DemoUtils"]),
+		.library(name: "RGFW", targets: ["RGFW"]),
 	],
 	dependencies: [
 		.package(

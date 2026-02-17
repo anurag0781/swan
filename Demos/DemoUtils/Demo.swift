@@ -9,6 +9,11 @@ public protocol DemoProvider {
 	mutating func frame(time: Double) throws -> Bool
 }
 
+/// The RGFW window created by runDemo, accessible to DemoProvider implementations
+/// for querying window-relative mouse position, size, etc.
+@MainActor
+public var demoWindow: OpaquePointer? = nil
+
 @MainActor
 public func runDemo<Provider: DemoProvider>(
 	x: Int32 = 0,
@@ -17,6 +22,7 @@ public func runDemo<Provider: DemoProvider>(
 	height: Int32 = 600,
 	title: String,
 	format: GPUTextureFormat = .BGRA8Unorm,
+	requiredFeatures: [GPUFeatureName] = [],
 	provider: Provider
 ) throws {
 	var mutableProvider: Provider = provider
@@ -42,6 +48,8 @@ public func runDemo<Provider: DemoProvider>(
 	var device: GPUDevice? = nil
 
 	var deviceDescriptor: GPUDeviceDescriptor = GPUDeviceDescriptor(
+		requiredFeatureCount: requiredFeatures.count,
+		requiredFeatures: requiredFeatures,
 		defaultQueue: GPUQueueDescriptor(),
 		deviceLostCallbackInfo: GPUDeviceLostCallbackInfo(
 			mode: .allowProcessEvents,
@@ -95,6 +103,7 @@ public func runDemo<Provider: DemoProvider>(
 	guard let window = window else {
 		fatalError("Failed to create window")
 	}
+	demoWindow = window
 
 	let surface: GPUSurface = getSurface(window: window, instance: instance)
 	surface.configure(config: GPUSurfaceConfiguration(device: device!, format: format, width: UInt32(width), height: UInt32(height)))
