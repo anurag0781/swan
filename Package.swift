@@ -39,20 +39,10 @@ let dawnTarget: Target = {
 	}
 }()
 
-// Xcode 16+ automatically adds -suppress-warnings for dependency package targets,
-// which fatally conflicts with -warnings-as-errors. Detect the Xcode build context
-// and skip -warnings-as-errors there; CLI builds (swift build) are unaffected.
-let isXcodeBuild: Bool = {
-	let env = ProcessInfo.processInfo.environment
-	// __CFBundleIdentifier is set to "com.apple.dt.Xcode" in Xcode's process tree
-	if env["__CFBundleIdentifier"] == "com.apple.dt.Xcode" { return true }
-	// xcodebuild also sets XCODE_PRODUCT_BUILD_VERSION
-	if env["XCODE_PRODUCT_BUILD_VERSION"] != nil { return true }
-	return false
-}()
-
+// -warnings-as-errors is opt-in via SWAN_WERROR=1. This avoids a fatal conflict
+// with Xcode's auto-injected -suppress-warnings when Swan is built as a dependency.
 var swiftSettings: [SwiftSetting] = []
-if !isXcodeBuild {
+if ProcessInfo.processInfo.environment["SWAN_WERROR"] == "1" {
 	swiftSettings.append(.unsafeFlags(["-warnings-as-errors"]))
 }
 
@@ -69,6 +59,14 @@ if useAddressSanitizer {
 		.unsafeFlags(["-sanitize=address"])
 	])
 }
+
+// .treatWarning produces -Wwarning which conflicts with Xcode's -suppress-warnings
+// for dependency packages. Only needed for Wasm builds (non-macOS CI).
+#if os(macOS)
+let embeddedWarningSettings: [SwiftSetting] = []
+#else
+let embeddedWarningSettings: [SwiftSetting] = [.treatWarning("EmbeddedRestrictions", as: .warning)]
+#endif
 
 let asanLinkerSettings: [LinkerSetting] =
 	useAddressSanitizer
@@ -97,7 +95,6 @@ let package = Package(
 		),
 		.library(name: "CDawn", targets: ["CDawn"]),
 		.library(name: "Dawn", targets: ["Dawn"]),
-		.library(name: "WebGPU", targets: ["WebGPU"]),
 		.library(name: "DemoUtils", targets: ["DemoUtils"]),
 		.library(name: "RGFW", targets: ["RGFW"]),
 	],
@@ -216,7 +213,7 @@ let package = Package(
 				// WebGPUCore or similar core library for shared protocols and types ?
 			],
 			path: "Sources/WebGPU/Wasm",
-			swiftSettings: swiftSettings + [.treatWarning("EmbeddedRestrictions", as: .warning)],
+			swiftSettings: swiftSettings + embeddedWarningSettings,
 			linkerSettings: asanLinkerSettings
 		),
 		.target(
@@ -229,7 +226,7 @@ let package = Package(
 				"Dawn",
 				"Wasm",
 			],
-			swiftSettings: swiftSettings + [.treatWarning("EmbeddedRestrictions", as: .warning)],
+			swiftSettings: swiftSettings + embeddedWarningSettings,
 			linkerSettings: asanLinkerSettings
 		),
 		.target(

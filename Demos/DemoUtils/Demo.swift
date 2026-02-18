@@ -48,7 +48,6 @@ public func runDemo<Provider: DemoProvider>(
 	var device: GPUDevice? = nil
 
 	var deviceDescriptor: GPUDeviceDescriptor = GPUDeviceDescriptor(
-		requiredFeatureCount: requiredFeatures.count,
 		requiredFeatures: requiredFeatures,
 		defaultQueue: GPUQueueDescriptor(),
 		deviceLostCallbackInfo: GPUDeviceLostCallbackInfo(

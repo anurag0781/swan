@@ -136,7 +136,7 @@ public func withWGPUArrayPointer<E: GPUSimpleStruct, R>(_ array: [E], _ lambda: 
 
 public func withWGPUArrayPointer<E: GPUSimpleStruct, R>(_ array: [E]?, _ lambda: (UnsafePointer<E.WGPUType>?) -> R) -> R where E.WGPUType == E {
 	if let array = array {
-		return withWGPUArrayPointer(array, lambda)
+		return withWGPUArrayPointer(array) { (pointer: UnsafePointer<E.WGPUType>) in lambda(pointer) }
 	}
 	return lambda(nil)
 }
@@ -165,7 +165,7 @@ public func withWGPUArrayPointer<E: RawRepresentable, R>(_ array: [E]?, _ lambda
 	guard let array = array else {
 		return lambda(nil)
 	}
-	return withWGPUArrayPointer(array, lambda)
+	return withWGPUArrayPointer(array) { (pointer: UnsafePointer<E>) in lambda(pointer) }
 }
 
 // Tuples 7, 9, and 12 (used in color space conversion structures)
