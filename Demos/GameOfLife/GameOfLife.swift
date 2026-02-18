@@ -1,5 +1,13 @@
-import Dawn
+// Copyright 2026 Adobe
+// All Rights Reserved.
+//
+// NOTICE: Adobe permits you to use, modify, and distribute this file in
+// accordance with the terms of the Adobe license agreement accompanying
+// it.
+//
+
 import DemoUtils
+import WebGPU
 import Foundation
 import RGFW
 
@@ -121,7 +129,6 @@ struct GameOfLifeDemo: DemoProvider {
 		let bindGroupLayout = device.createBindGroupLayout(
 			descriptor: GPUBindGroupLayoutDescriptor(
 				label: "Cell Bind Group Layout",
-				entryCount: 3,
 				entries: [
 					GPUBindGroupLayoutEntry(
 						binding: 0,
@@ -148,7 +155,6 @@ struct GameOfLifeDemo: DemoProvider {
 				descriptor: GPUBindGroupDescriptor(
 					label: "Cell renderer bind group A",
 					layout: bindGroupLayout,
-					entryCount: 3,
 					entries: [
 						GPUBindGroupEntry(binding: 0, buffer: uniformBuffer!),
 						GPUBindGroupEntry(binding: 1, buffer: cellStateStorage[0]),
@@ -160,7 +166,6 @@ struct GameOfLifeDemo: DemoProvider {
 				descriptor: GPUBindGroupDescriptor(
 					label: "Cell renderer bind group B",
 					layout: bindGroupLayout,
-					entryCount: 3,
 					entries: [
 						GPUBindGroupEntry(binding: 0, buffer: uniformBuffer!),
 						GPUBindGroupEntry(binding: 1, buffer: cellStateStorage[1]),
@@ -174,7 +179,6 @@ struct GameOfLifeDemo: DemoProvider {
 		let pipelineLayout = device.createPipelineLayout(
 			descriptor: GPUPipelineLayoutDescriptor(
 				label: "Cell Pipeline Layout",
-				bindGroupLayoutCount: 1,
 				bindGroupLayouts: [bindGroupLayout]
 			)
 		)
@@ -187,11 +191,9 @@ struct GameOfLifeDemo: DemoProvider {
 				vertex: GPUVertexState(
 					module: cellShaderModule,
 					entryPoint: "vertexMain",
-					bufferCount: 1,
 					buffers: [
 						GPUVertexBufferLayout(
 							arrayStride: 8,
-							attributeCount: 1,
 							attributes: [
 								GPUVertexAttribute(format: .float32x2, offset: 0, shaderLocation: 0)
 							]
@@ -212,7 +214,6 @@ struct GameOfLifeDemo: DemoProvider {
 				fragment: GPUFragmentState(
 					module: cellShaderModule,
 					entryPoint: "fragmentMain",
-					targetCount: 1,
 					targets: [GPUColorTargetState(format: format)]
 				)
 			)
@@ -236,7 +237,6 @@ struct GameOfLifeDemo: DemoProvider {
 		let pass = encoder.beginRenderPass(
 			descriptor: GPURenderPassDescriptor(
 				label: "render pass",
-				colorAttachmentCount: 1,
 				colorAttachments: [
 					GPURenderPassColorAttachment(
 						view: destTexture.createView(),
@@ -253,59 +253,22 @@ struct GameOfLifeDemo: DemoProvider {
 		pass.setBindGroup(
 			groupIndex: 0,
 			group: bindGroups[Int(step % 2)],
-			dynamicOffsetCount: 0,
 			dynamicOffsets: []
 		)
 		pass.draw(vertexCount: 6, instanceCount: UInt32(gridSize * gridSize), firstVertex: 0, firstInstance: 0)
 		pass.end()
 	}
 
-	func screenShotRender(encoder: GPUCommandEncoder, w: Int, h: Int, format: GPUTextureFormat) -> GPUBuffer {
+	func screenShotRender(encoder: GPUCommandEncoder, w: Int, h: Int, format: GPUTextureFormat) -> GPUTexture {
 		guard let device: GPUDevice = self.device else {
 			fatalError("Device not initialized")
 		}
-		let targetTexture: GPUTexture = device.createTexture(
-			descriptor: GPUTextureDescriptor(
-				label: "Temp screenshot",
-				usage: [GPUTextureUsage.copySrc, GPUTextureUsage.renderAttachment],
-				dimension: GPUTextureDimension._2D,  // unsigthly _, probably no way around it though?
-				size: GPUExtent3D(width: UInt32(w), height: UInt32(h), depthOrArrayLayers: 1),  // note: should have default value for depthOrArrayLayers
-				format: format
-			)
-		)
-			;
-		let readbackBuffer: GPUBuffer = device.createBuffer(
-			descriptor: GPUBufferDescriptor(
-				label: "Temp screenshot",
-				usage: [GPUBufferUsage.copyDst, GPUBufferUsage.mapRead],
-				size: UInt64(w * h * 4),  // consider: should we map those to swift Int instead?
-				mappedAtCreation: false
-			)
-		)!  // unclear why this returns an optional (create texture does not)
-
+		let targetTexture = device.createRenderTargetTexture(width: w, height: h, format: format)
 		renderToTexture(destTexture: targetTexture, encoder: encoder)
-
-		encoder.copyTextureToBuffer(
-			source: GPUTexelCopyTextureInfo(
-				texture: targetTexture,
-				mipLevel: 0,
-				origin: GPUOrigin3D(x: 0, y: 0, z: 0),
-				aspect: WGPUTextureAspect.all
-			),
-			destination: GPUTexelCopyBufferInfo(
-				layout: GPUTexelCopyBufferLayout(
-					offset: 0,
-					bytesPerRow: UInt32(w * 4),
-					rowsPerImage: UInt32(h)
-				),
-				buffer: readbackBuffer
-			),
-			copySize: GPUExtent3D(width: UInt32(w), height: UInt32(h), depthOrArrayLayers: 1)
-		)
-		return readbackBuffer
+		return targetTexture
 	}
 
-	func savePPM(destFileName: String, bgra: UnsafePointer<UInt8>, w: Int, h: Int) {
+	static func savePPM(destFileName: String, bgra: UnsafePointer<UInt8>, w: Int, h: Int) {
 		do {
 			let fileManager = FileManager.default
 			let folderURL = try fileManager.url(
@@ -317,7 +280,7 @@ struct GameOfLifeDemo: DemoProvider {
 			let fileURL = folderURL.appendingPathComponent(destFileName)
 			let header: String = "P6\n\(w) \(h) 255\n"
 			var data = header.data(using: .ascii)!
-			for i in 0..<w * h {
+			for i in 0..<(w * h) {
 				data.append(bgra[i * 4 + 2])
 				data.append(bgra[i * 4 + 1])
 				data.append(bgra[i * 4])
@@ -329,38 +292,6 @@ struct GameOfLifeDemo: DemoProvider {
 		}
 	}
 
-	func screenshotReadback(readbackBuffer: GPUBuffer, w: Int, h: Int) {
-		// inconsistent: sizes here are Ints
-		print("Readback started...");
-		let _ = readbackBuffer.mapAsync(
-			mode: GPUMapMode.read,
-			offset: 0,
-			size: Int(readbackBuffer.size),
-			callbackInfo: GPUBufferMapCallbackInfo(
-				mode: GPUCallbackMode.allowProcessEvents,
-				callback: { status, message in
-					if (status != GPUMapAsyncStatus.success) {
-						fatalError(message ?? "map async failed");
-					}
-					guard
-						let ptr: UnsafeRawPointer = readbackBuffer.getConstMappedRange(
-							offset: 0,
-							size: Int(readbackBuffer.size)
-						)
-					else {
-						fatalError("map returned null pointer");
-					}
-					print("Readback ok!")
-
-					let ptr2: UnsafePointer<UInt8> = ptr.bindMemory(to: UInt8.self, capacity: Int(readbackBuffer.size))
-					savePPM(destFileName: "myshot.ppm", bgra: ptr2, w: w, h: h);
-
-					readbackBuffer.unmap();
-					readbackBuffer.destroy();
-				}
-			)
-		);
-	}
 
 	@MainActor
 	mutating func frame(time: Double) throws -> Bool {
@@ -403,13 +334,13 @@ struct GameOfLifeDemo: DemoProvider {
 		let backbuffer = surface.getCurrentTexture();
 		renderToTexture(destTexture: backbuffer, encoder: encoder)
 
-		var screenShotRenderedBuffer: GPUBuffer?;
-		let screenShotW = 1024;
-		let screenShotH = 600;
+		var screenShotTexture: GPUTexture? = nil
+		let screenShotW = 1024
+		let screenShotH = 600
 
 		if (sPressed) {
 			print("Screen shot!")
-			screenShotRenderedBuffer = self.screenShotRender(
+			screenShotTexture = self.screenShotRender(
 				encoder: encoder,
 				w: screenShotW,
 				h: screenShotH,
@@ -418,11 +349,19 @@ struct GameOfLifeDemo: DemoProvider {
 		}
 
 		let commandBuffer = encoder.finish(descriptor: nil)!
-		device.queue.submit(commandCount: 1, commands: [commandBuffer])
+		device.queue.submit(commands: [commandBuffer])
 
-		if let screenShotRenderedBuffer2 = screenShotRenderedBuffer {
-			self.screenshotReadback(readbackBuffer: screenShotRenderedBuffer2, w: screenShotW, h: screenShotH)
-			screenShotRenderedBuffer = nil;
+		if let texture = screenShotTexture {
+			texture.readPixelsAsync(
+				device: device,
+				width: screenShotW,
+				height: screenShotH
+			) { pixels in
+				pixels.withUnsafeBufferPointer { buffer in
+					GameOfLifeDemo.savePPM(destFileName: "myshot.ppm", bgra: buffer.baseAddress!, w: screenShotW, h: screenShotH)
+				}
+				texture.destroy()
+			}
 		}
 
 		surface.present()

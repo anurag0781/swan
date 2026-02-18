@@ -5,10 +5,13 @@
 // accordance with the terms of the Adobe license agreement accompanying
 // it.
 //
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 
 import Foundation
 import PackageDescription
+
+let supportedNativePlatforms: [Platform] = [.macOS, .windows]
+let wasmPlatforms: [Platform] = [.wasi]
 
 let swanLocalDawn: Bool = ProcessInfo.processInfo.environment["SWAN_LOCAL_DAWN"] != nil
 
@@ -80,6 +83,10 @@ let package = Package(
 		.iOS(.v18),  // iOS 18 (or adjust the version as needed)
 	],
 	products: [
+		.library(
+			name: "WebGPU",
+			targets: ["WebGPU"]
+		),
 		.plugin(
 			name: "GenerateDawnBindingsPlugin",
 			targets: ["GenerateDawnBindingsPlugin"],
@@ -99,7 +106,7 @@ let package = Package(
 			url: "https://github.com/swiftlang/swift-testing.git",
 			from: "6.2.3"
 		),
-		.package(url: "https://github.com/apple/swift-log", from: "1.9.1"),
+		.package(url: "https://github.com/apple/swift-log", from: "1.10.1"),
 		.package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.0"),
 		.package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
 		.package(url: "https://github.com/swiftlang/swift-format.git", from: "602.0.0"),
@@ -194,11 +201,35 @@ let package = Package(
 			linkerSettings: asanLinkerSettings
 		),
 		.target(
-			name: "WebGPU",
+			name: "WebGPUDawn",
 			dependencies: [
+				// WebGPUCore or similar core library for shared protocols and types ?
 				"Dawn"
 			],
+			path: "Sources/WebGPU/Dawn",
 			swiftSettings: swiftSettings,
+			linkerSettings: asanLinkerSettings
+		),
+		.target(
+			name: "WebGPUWasm",
+			dependencies: [
+				// WebGPUCore or similar core library for shared protocols and types ?
+			],
+			path: "Sources/WebGPU/Wasm",
+			swiftSettings: swiftSettings + [.treatWarning("EmbeddedRestrictions", as: .warning)],
+			linkerSettings: asanLinkerSettings
+		),
+		.target(
+			name: "WebGPU",
+			dependencies: [
+				.target(name: "WebGPUDawn", condition: .when(platforms: supportedNativePlatforms)),
+				.target(name: "WebGPUWasm", condition: .when(platforms: wasmPlatforms)),
+			],
+			exclude: [
+				"Dawn",
+				"Wasm",
+			],
+			swiftSettings: swiftSettings + [.treatWarning("EmbeddedRestrictions", as: .warning)],
 			linkerSettings: asanLinkerSettings
 		),
 		.target(
@@ -235,6 +266,18 @@ let package = Package(
 				.linkedLibrary("c++", .when(platforms: [.macOS])),
 			]
 		),
+		.executableTarget(
+			name: "BitonicSort",
+			dependencies: ["DemoUtils"],
+			path: "Demos/BitonicSort",
+			swiftSettings: swiftSettings,
+			linkerSettings: asanLinkerSettings + [
+				.linkedFramework("Cocoa", .when(platforms: [.macOS])),
+				.linkedFramework("IOKit", .when(platforms: [.macOS])),
+				.linkedFramework("Metal", .when(platforms: [.macOS])),
+				.linkedLibrary("c++", .when(platforms: [.macOS])),
+			]
+		),
 		.testTarget(
 			name: "CodeGenerationTests",
 			dependencies: [
@@ -248,7 +291,7 @@ let package = Package(
 		.testTarget(
 			name: "DawnTests",
 			dependencies: [
-				"Dawn",
+				"WebGPU",
 				.product(name: "Testing", package: "swift-testing"),
 			],
 			swiftSettings: swiftSettings,
