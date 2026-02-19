@@ -135,7 +135,7 @@ public func withWGPUArrayPointer<E: GPUSimpleStruct, R>(_ array: [E], _ lambda: 
 }
 
 public func withWGPUArrayPointer<E: GPUSimpleStruct, R>(_ array: [E]?, _ lambda: (UnsafePointer<E.WGPUType>?) -> R) -> R where E.WGPUType == E {
-	if let array = array {
+	if let array = array, !array.isEmpty {
 		return withWGPUArrayPointer(array) { (pointer: UnsafePointer<E.WGPUType>) in lambda(pointer) }
 	}
 	return lambda(nil)
@@ -148,7 +148,7 @@ public func withWGPUArrayPointer<E: Numeric, R>(_ array: [E], _ lambda: (UnsafeP
 }
 
 public func withWGPUArrayPointer<E: Numeric, R>(_ array: [E]?, _ lambda: (UnsafePointer<E>?) -> R) -> R {
-	if let array = array {
+	if let array = array, !array.isEmpty {
 		return withWGPUArrayPointer(array) { (pointer: UnsafePointer<E>) in lambda(pointer) }
 	}
 	return lambda(nil)
@@ -162,7 +162,7 @@ public func withWGPUArrayPointer<E: RawRepresentable, R>(_ array: [E], _ lambda:
 }
 
 public func withWGPUArrayPointer<E: RawRepresentable, R>(_ array: [E]?, _ lambda: (UnsafePointer<E>?) -> R) -> R {
-	guard let array = array else {
+	guard let array = array, !array.isEmpty else {
 		return lambda(nil)
 	}
 	return withWGPUArrayPointer(array) { (pointer: UnsafePointer<E>) in lambda(pointer) }
